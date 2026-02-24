@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """
-YARA Scan Path Preview
-Shows which file paths will be scanned when a scan is initiated.
+YARA Scan Path Preview (Pathlib Version)
 """
 
-import os
+from pathlib import Path
 import argparse
-import sys
 
 
-def should_scan(file_path, extensions, max_size):
+def should_scan(file_path: Path, extensions, max_size):
     # Extension filter
     if extensions:
-        if not file_path.lower().endswith(tuple(extensions)):
+        if file_path.suffix.lower() not in extensions:
             return False
 
     # File size filter
     if max_size is not None:
         try:
-            if os.path.getsize(file_path) > max_size:
+            if file_path.stat().st_size > max_size:
                 return False
         except OSError:
             return False
@@ -29,57 +27,35 @@ def should_scan(file_path, extensions, max_size):
 def preview_scan_paths(scan_dirs, exclude_dirs, extensions, max_size):
     results = []
 
-    for scan_dir in scan_dirs:
-        if not os.path.exists(scan_dir):
-            print(f"[!] Skipping missing path: {scan_dir}")
+    for directory in scan_dirs:
+        base_path = Path(directory)
+
+        if not base_path.exists():
+            print(f"[!] Skipping missing path: {directory}")
             continue
 
-        for root, dirs, files in os.walk(scan_dir):
-            # Remove excluded directories
-            dirs[:] = [
-                d for d in dirs
-                if os.path.join(root, d) not in exclude_dirs
-            ]
+        for file_path in base_path.rglob("*"):
+            if file_path.is_file():
 
-            for name in files:
-                full_path = os.path.join(root, name)
+                # Exclusion check
+                if any(str(file_path).startswith(str(Path(ex))) for ex in exclude_dirs):
+                    continue
 
-                if should_scan(full_path, extensions, max_size):
-                    results.append(full_path)
+                if should_scan(file_path, extensions, max_size):
+                    results.append(file_path)
 
     return results
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Preview file paths that will be scanned using YARA"
+        description="Preview file paths that will be scanned using YARA (pathlib version)"
     )
 
-    parser.add_argument(
-        "--scan-dirs",
-        nargs="+",
-        required=True,
-        help="Directories to scan"
-    )
-
-    parser.add_argument(
-        "--exclude-dirs",
-        nargs="*",
-        default=[],
-        help="Directories to exclude"
-    )
-
-    parser.add_argument(
-        "--extensions",
-        nargs="*",
-        help="File extensions to scan (e.g. .exe .dll .py)"
-    )
-
-    parser.add_argument(
-        "--max-size",
-        type=int,
-        help="Maximum file size in bytes"
-    )
+    parser.add_argument("--scan-dirs", nargs="+", required=True)
+    parser.add_argument("--exclude-dirs", nargs="*", default=[])
+    parser.add_argument("--extensions", nargs="*")
+    parser.add_argument("--max-size", type=int)
 
     args = parser.parse_args()
 
@@ -87,7 +63,7 @@ def main():
 
     files = preview_scan_paths(
         scan_dirs=args.scan_dirs,
-        exclude_dirs=set(args.exclude_dirs),
+        exclude_dirs=args.exclude_dirs,
         extensions=args.extensions,
         max_size=args.max_size
     )

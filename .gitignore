@@ -31,3 +31,8 @@ Thumbs.db
 # Env / secrets
 .env
 .env.*
+
+# documents to ignore
+Logbook for Dissertation.docx
+malware detecion project proposal.docx
+reports/
