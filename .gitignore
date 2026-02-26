@@ -35,5 +35,7 @@ Thumbs.db
 # documents to ignore
 Logbook for Dissertation.docx
 malware detecion project proposal.docx
-reports/*.docx
-reports/*.pdf
+Design/images/*.pdf
+reports/
+*.docx
+*.pdf
