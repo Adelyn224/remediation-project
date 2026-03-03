@@ -2,7 +2,7 @@
  * database model definitions and relationships setup using Sequelize Object Relational Mapping (ORM).
  * it loads the Sequelize library and initializes a connection to a PostgreSQL 
  * database named "malware_database" using the provided credentials.
- * sequelize helps in defining models i.e. the entities and managing database interactions.
+ * sequelize transalate the JS code into SQL queries that mach the choosen database dialect (in this case, PostgreSQL).
  */
 
 const {Sequelize} = require('sequelize');
