@@ -17,7 +17,7 @@ from datetime import datetime, UTC
     It prints a clear error message and exists the script.
 """
 try:
-    import yara
+    import yara # type: ignore
     YARA_AVAILABLE = True
 except ImportError:
     YARA_AVAILABLE = False
