@@ -1,4 +1,4 @@
-rule mirai_rule {
+rule mirai_rule : Mirai elf {
     meta:
         description = "Detects the presence of a self-propagating IoT botnet binary"
         author = "me"

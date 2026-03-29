@@ -1,4 +1,4 @@
-rule snakeKeyLogger_rule {
+rule snakeKeyLogger_rule : SnakeKeyLogger exe {
     meta:
         description = "Detects the presence of a snakeKeyLogger information stealer binary"
         author = "me"
@@ -13,5 +13,5 @@ rule snakeKeyLogger_rule {
         $string5 = "https://api.telegram.org/bot"
         $string6 = "http://51.38.247.67:8081/_send_.php?L"
     condition:
-        ($hex_string or $string1) and ($string2 or $string3 or $string4 or $string5 or $string6)
+        $string2 and $string3 and $string4 and $string5 and $string6 and ($string1 or $hex_string)
 }

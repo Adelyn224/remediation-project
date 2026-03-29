@@ -1,4 +1,4 @@
-rule redLineStealer_rule {
+rule redLineStealer_rule : RedLineStealer exe {
     meta:
         description = "Detects the presence of a RedLine Stealer binary"
         author = "me"
@@ -6,9 +6,10 @@ rule redLineStealer_rule {
         version = "1.0" 
     strings:
         $hex_string = {4D 5A} // "MZ" header of the PE file
-        $string1 = "!This program cannot be run in DOS mode."
-        $string2 = "https://api.ip.sb/ip"
-        $string3 = "For more detailed information please visit https://www.jrsoftware.org/ishelp/index.php?topic=setupcmdline"
+        $string1 = "baiohttp\\_http_parser.cp314-win_amd64.pyd"
+        $string2 = "baiohttp\\_websocket\\reader_c.cp314-win_amd64.pyd"
+        $string3 = "HttpSendRequestW"
+        $string4 = "HttpOpenRequestW"
     condition:
-        ($hex_string or $string1) and ($string2 or $string3)
+        $hex_string and $string1 and $string2 and $string3 and $string4 
 }
