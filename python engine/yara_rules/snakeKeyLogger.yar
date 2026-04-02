@@ -1,17 +1,18 @@
-rule snakeKeyLogger_rule : SnakeKeyLogger exe {
+rule snakeKeyLogger_rule : snakeKeyLogger exe {
     meta:
         description = "Detects the presence of a snakeKeyLogger information stealer binary"
         author = "me"
         date = "20/02/2026" 
         version = "1.0" 
     strings:
-        $hex_string = {4D 5A} // "MZ" header of PE files
-        $string1 = "!This program cannot be run in DOS mode."
-        $string2 = "http://varders.kozow.com:8081,http://aborters.duckdns.org:8081,http://anotherarmy.dns.army:8081"
-        $string3 = "https://reallyfreegeoip.org/xml/"
-        $string4 = "http://checkip.dyndns.org/"
-        $string5 = "https://api.telegram.org/bot"
-        $string6 = "http://51.38.247.67:8081/_send_.php?L"
+        $string1 = "http://varders.kozow.com:8081,http://aborters.duckdns.org:8081,http://anotherarmy.dns.army:8081" ascii wide
+        $string2 = "https://reallyfreegeoip.org/xml/" ascii wide
+        $string3 = "http://checkip.dyndns.org/" ascii wide
+        $string4 = "https://api.telegram.org/bot" ascii wide
+        $string5 = "http://51.38.247.67:8081/_send_.php?L" ascii wide
+        $string6 = "/sendDocument?chat_id=" ascii wide
+        $string7 = "/sendMessage?chat_id=" ascii wide
     condition:
-        $string2 and $string3 and $string4 and $string5 and $string6 and ($string1 or $hex_string)
+        uint16(0) == 0x5A4D and $string4 and 
+        3 of ($string1, $string2, $string3, $string5, $string6, $string7)
 }

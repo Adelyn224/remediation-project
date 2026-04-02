@@ -1,4 +1,4 @@
-rule vidar_rule : Vidar exe UPX {
+rule vidar_rule : Vidar dll {
     meta:
         description = "Detects the presence of a Vidar information stealer binary"
         author = "me"
@@ -6,9 +6,10 @@ rule vidar_rule : Vidar exe UPX {
         version = "1.0" 
     strings:
         $hex_string = {4D 5A} // "MZ" header of PE files
-        $hex_string1 = {2E 69 64 61 74 61} // ".idata"
-        $string1 = "!This program cannot be run in DOS mode."
-        $string2 = "GetSystemInfo"
+        $string1 = "Stop reversing the binary"
+        $string2 = "Reconsider your life choices"
+        $string3 = "And go touch some grass"
+        $string4 = "C:\\tgbotsideloading\\sideload\\x64\\AdvancedPolymorph.h"
     condition:
-       $hex_string1 and $string2 and (hex_string or $string1)
+       $hex_string and $string4 and ($string1 or $string2 or $string3)
 }

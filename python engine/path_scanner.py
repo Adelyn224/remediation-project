@@ -8,7 +8,7 @@ from pathlib import Path
 import argparse
 import json
 import sys
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 
 """
@@ -99,7 +99,7 @@ def load_yara_rules(rules_dir):
             yara.compile(filepath=str(a_file))
             sources[a_file.stem] = str(a_file)
         except yara.SyntaxError as err:
-            print(f"Warning: failed to compile YARA rule file {a_file}: {err}")
+            print(f"Warning: failed to compile YARA rule file at: {a_file}: {err}")
     
     if not sources:
         print(f"Error: no valid YARA rule files found in: {rules_dir}")
@@ -168,25 +168,33 @@ def run_scan(scan_dirs, exclude_dirs, file_extensions, max_size, rules):
     print(f"{len(files)} file(s) queued for scanning.\n")
 
     found_files: list[dict] = []
-    matched_count = 0
+    unmatched_files: list[str] = []
 
     for current_file_id, file_path in enumerate(files, start=1):
-        print(f"File {current_file_id} of {len(files)} is being scanned at {file_path}")
+        print(f"File {current_file_id} of {len(files)} is being scanned at: {file_path}")
 
-        # stores matches founnd
+        # append the matches founnd
         matches = scan_file(file_path, rules)
         if matches:
-            matched_count += 1
             matched_file = {"file": str(file_path), "matches": matches}
             found_files.append(matched_file)
 
             # print an alert message for each matched file
             rule_names = ", ".join(m["rule"] for m in matches)
-            print(f"  Match found at: {file_path}")
-            print(f"          Rules matched: {rule_names}")
+            print(f"Match found at: {file_path}")
+            print(f"          Rules matched: {rule_names}\n")
+        else:
+            unmatched_files.append(str(file_path))
+            print(f"No match found at: {file_path}\n")
 
-    print(f"\n Scan complete, there were {matched_count} out of {len(files)} file(s) matched.")
-    return found_files
+
+    print(
+        f"Scan complete, there were {len(found_files)} matched file(s) "
+        f"and {len(unmatched_files)} unmatched file(s) "
+        f"out of {len(files)} total file(s) scanned."
+    )
+
+    return found_files, unmatched_files, len(files)
 
 
 """
@@ -194,12 +202,18 @@ def run_scan(scan_dirs, exclude_dirs, file_extensions, max_size, rules):
     it details the scan time, the directories that were scanned, the total number 
     of matches found, and the list of findings (matched files and their details).
 """
-def build_report(findings, scan_dirs):
+def build_report(findings, unmatched_files, scan_dirs, total_files_scanned):
     return {
-        "scan_time": datetime.now(UTC).isoformat(),
-        "scanned_directories": scan_dirs,
-        "total_matches": len(findings),
-        "findings": findings,
+        "Scan summary": {
+            "Time of scan": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "Directories scanned": scan_dirs,
+            "Total files scanned": total_files_scanned,
+            "Number of matched files": len(findings),
+            "Number of unmatched files": len(unmatched_files),
+        },
+        "Matched file paths": [entry["file"] for entry in findings],
+        "Unmatched file paths": unmatched_files,
+        "Findings": findings,
     }
 
 
@@ -258,7 +272,7 @@ def main():
 
     # performs a scan of the specified directories using 
     # the loaded YARA rules and the provided filters.
-    findings = run_scan(
+    findings, unmatched_files, total_files_scanned = run_scan(
         scan_dirs=args.scan_directories,
         exclude_dirs=args.exclude_directories,
         file_extensions=extensions,
@@ -267,7 +281,7 @@ def main():
     )
 
     # builds a report of the scan results.
-    report = build_report(findings, args.scan_directories)
+    report = build_report(findings=findings, unmatched_files=unmatched_files, scan_dirs=args.scan_directories, total_files_scanned=total_files_scanned)
 
     # if an output path is provided, it saves the report to that path in JSON format.
     # otherwise, it prints the report to stdout in JSON format.
@@ -275,7 +289,7 @@ def main():
         save_report(report, args.output)
     else:
         # prints a summary to stdout
-        print("\n--- JSON Report (stdout) ---")
+        print("\nJSON Report Summary")
         print(json.dumps(report, indent=2))
 
 

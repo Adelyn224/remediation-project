@@ -5,10 +5,10 @@ rule cobaltStrike_rule : CobaltStrike exe {
         date = "20/02/2026" 
         version = "1.0" 
     strings:
-        $hex_string = {4D 5A} // "MZ" header of the PE file
-        $string1 = "!This program cannot be run in DOS mode."
-        $string2 = "f:\\dd\\vctools\\vc7libs\\ship\\atlmfc\\src\\mfc\\auxdata.cpp"
-        $string3 = "GetSystemTimeAsFileTime"
+        $string1 = "f:\\dd\\vctools\\vc7libs\\ship\\atlmfc\\src\\mfc\\auxdata.cpp"
+        $string2 = "f:\\dd\\vctools\\vc7libs\\ship\\atlmfc\\include\\afxwin2.inl"
+        $string3 = "f:\\dd\\vctools\\vc7libs\\ship\\atlmfc\\src\\mfc\\appcore.cpp"
+        $string4 = "GetSystemTimeAsFileTime"
     condition:
-        $hex_string and ($string2 or ($string1 and $string3))
+        $string1 and $string2 and $string3 and $string4
 }
