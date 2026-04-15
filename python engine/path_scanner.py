@@ -8,13 +8,13 @@ from pathlib import Path
 import argparse
 import json
 import sys
+import time                          # FIX 3: imported to support the polling loop timeout logic
 from datetime import datetime, timezone
 
 
 """
     this acts a fail-safe in case the script is run
     without having the yara-python library installed.
-    it prints a clear error message and exists the script.
 """
 try:
     import yara # type: ignore
@@ -35,15 +35,13 @@ except ImportError:
     REQUESTS_AVAILABLE = False 
 
 
-# ════════════════════════════════════════════════════════════════════════════
 # yara static analysis engine that scans files for malware using YARA rules.
-# ════════════════════════════════════════════════════════════════════════════
 def should_scan(file_path, file_extensions, max_size):
 
     """
         checks if a file should be scanned by checking 
         its extension and size against the provided 
-        filters in the command argument.
+        filters in the CLI argument.
     """
 
     # extension filter
@@ -96,10 +94,8 @@ def preview_scan_paths(scan_dirs, exclude_dirs, file_extensions, max_size):
 def load_yara_rules(rules_dir):
 
     """
-        loads and compiles YARA rules from the specified directory.
-        it loads files with a .yar or .yara extension, compiles them 
-        into a single yara.Rules object, and returns it. 
-        If no rules are found, it returns None.
+        loads .yar or .yara files in the specified directory
+        then compiles them into a single yara rules object, and returns it.
     """
 
     rules_path = Path(rules_dir)
@@ -115,7 +111,7 @@ def load_yara_rules(rules_dir):
 
     # validates and compiles each rule file individually,
     # skipping any files that fail with a syntax error.
-    sources: dict[str, str] = {}
+    sources = {} # a dictionary mapping {"rule_name": "file_path"}
     for a_file in rule_files:
         try:
             yara.compile(filepath=str(a_file))
@@ -144,10 +140,9 @@ def scan_file(file_path, rules):
 
     """
         scans a single file against the compiled YARA rules. 
-        It returns a list of matches, where an empty list 
-        means no matches were found.
-        Each match is a dictionary containing the rule name, 
-        tags, metadata, and matched strings.
+        it returns a list of match dictionaries, each containing 
+        the rule name, tags, metadata, and which string inside 
+        the rule triggered the match and at what byte offset.
     """
 
     try:
@@ -187,21 +182,17 @@ def scan_file(file_path, rules):
 def run_scan(scan_dirs, exclude_dirs, file_extensions, max_size, rules):
 
     """
-        runs a full yara scan on the target directories 
-        using the provided filters and rules.
-
-        It returns:
-        - a list of found files with their matches,
-        - a list of unmatched file paths, and
-        - the total number of files scanned.
+        runs a yara scan on the specified directory using the provided filters and rules.
+        then, it loops through the files that pass the filter checks
+        and calls the scan_file function to check for matches against the YARA rules.
     """
 
     files = preview_scan_paths(scan_dirs, exclude_dirs, file_extensions, max_size)
     total_files = len(files)
     print(f"\n{total_files} file(s) queued for scanning.\n")
 
-    found_files: list[dict] = []
-    unmatched_files: list[str] = []
+    found_files = []
+    unmatched_files = []
 
     for current_file_id, file_path in enumerate(files, start=1):
         print(f"File {current_file_id} of {total_files} is being scanned at: {file_path}")
@@ -230,15 +221,13 @@ def run_scan(scan_dirs, exclude_dirs, file_extensions, max_size, rules):
     return found_files, unmatched_files, total_files
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# cuckoo sandbox API where files are sent to local cuckoo sandbox 
-# instance for dynamic analysis.
-# ════════════════════════════════════════════════════════════════════════════
-def submit_a_sample_to_cuckoo(file_path, cuckoo_api):
+# cuckoo sandbox API where files are sent to the 
+# local cuckoo sandbox instance for dynamic analysis.
+def submit_a_sample_to_cuckoo(file_path, cuckoo_api, api_token=None):
 
     """ 
-        submits a file to the Cuckoo Sandbox for analysis.
-        returns the task ID if successfult or None on failure.
+        submits a file to the Cuckoo REST API for analysis.
+        returns the task ID if successful or None on failure.
     """
 
     if not Path(file_path).is_file():
@@ -249,7 +238,8 @@ def submit_a_sample_to_cuckoo(file_path, cuckoo_api):
     try:
         with open(file_path, "rb") as a_file:
             files = {"file": (Path(file_path).name, a_file)}
-            response = requests.post(f"{cuckoo_api}/tasks/create/file", files=files, timeout=30)
+            http_request_header = {"Authorization": f"Bearer {api_token}"} if api_token else {} # attaches the Bearer token to the request header if one was provided.
+            response = requests.post(f"{cuckoo_api}/tasks/create/file", files=files, headers=http_request_header, timeout=30)
 
             # checks the response status for a scccessful submission
             response.raise_for_status()
@@ -261,17 +251,17 @@ def submit_a_sample_to_cuckoo(file_path, cuckoo_api):
         return None
 
 
-def get_task_status(task_id, cuckoo_api):
+def get_task_status(task_id, cuckoo_api, api_token=None):
 
     """ 
-        retrieves the current status of a 
-        submitted task from the Cuckoo Sandbox API.
+        retrieves the current status of a submitted task from the Cuckoo Sandbox API.
     """
 
     try:
-        response = requests.get(f"{cuckoo_api}/tasks/view/{task_id}", timeout=15)
+        http_request_header = {"Authorization": f"Bearer {api_token}"} if api_token else {}
+        response = requests.get(f"{cuckoo_api}/tasks/view/{task_id}", headers=http_request_header, timeout=15)
         response.raise_for_status()
-        status = response.json().get("task", {}).get("status")
+        status = response.json().get("task", {}).get("status") # status of a task moves through pending -> running -> completed -> reported states
         print(f"Current status of task {task_id}: {status}")
         return status
     except requests.RequestException as err:
@@ -279,16 +269,16 @@ def get_task_status(task_id, cuckoo_api):
         return None
 
 
-def get_task_report(task_id, cuckoo_api):
+def get_task_report(task_id, cuckoo_api, api_token=None):
 
     """
-        retreives the JSON report for a completed 
-        task from the cuckoo sandbox api.
-        returns None on failure.
+        retreives the JSON report for a completed task from the cuckoo API
+        once the task status is "reported". it returns None on failure.
     """
 
     try:
-        response = requests.get(f"{cuckoo_api}/tasks/report/{task_id}", timeout=30)
+        http_request_header = {"Authorization": f"Bearer {api_token}"} if api_token else {}
+        response = requests.get(f"{cuckoo_api}/tasks/report/{task_id}", headers=http_request_header, timeout=30)
         response.raise_for_status()
         print(f"Report for task {task_id} retrieved successfully.")
         report = response.json()
@@ -298,9 +288,58 @@ def get_task_report(task_id, cuckoo_api):
         return None
 
 
-# ════════════════════════════════════════════════════════════════════════════
+def wait_for_task_completion(task_id, cuckoo_api, timeout, api_token=None):
+
+    """
+        querys the Cuckoo API every 10 seconds until the task
+        reaches the "reported" status, a failure state, or the
+        timeout threshold is exceeded.
+
+        returns True if the task completed successfully,
+        or False if it failed or timed out.
+    """
+
+    # Cuckoo task status states:
+    # pending   -> task is queued but not yet picked up by the scheduler
+    # running   -> task is actively being executed inside the guest VM
+    # completed -> guest has finished execution and results are being processed
+    # reported  -> report has been fully generated and is ready to retrieve
+    # failed_analysis   -> the analysis itself failed inside the guest
+    # failed_reporting  -> the analysis ran but report generation failed
+    terminal_failure_states = {"failed_analysis", "failed_reporting"}
+
+    print(f"Waiting for Cuckoo analysis to complete (timeout: {timeout} seconds, querying the API every 10 seconds)")
+
+    start_time = time.time()
+
+    while True:
+        elapsed = time.time() - start_time # checks if the elapsed time has exceeded the configured timeout threshold.
+        if elapsed >= timeout:
+            print(
+                f"Error: the analysis did not complete within the {timeout} second timeout. "
+                f"The task may still be running in Cuckoo. "
+                f"You can retrieve the report manually later using task ID: {task_id}"
+            )
+            return False
+
+        status = get_task_status(task_id, cuckoo_api, api_token)
+
+        # checks if a task is completed successfully and or fails and prints an appropriate message
+        if status == "reported":
+            print(f"Task {task_id} has completed successfully and the report is ready.")
+            return True
+
+        if status in terminal_failure_states:
+            print(f"Error: Cuckoo analysis ended in a failure state: '{status}'. No report will be available.")
+            return False
+
+        # if the status is still in any of these "pending, running, completed" states,
+        # wait for 10 seconds before querying the API for the task status.
+        print(f"Task {task_id} is still in progress (status: {status}). Checking again in 10 seconds...")
+        time.sleep(10)
+
+
 # generates the final scan summary report
-# ════════════════════════════════════════════════════════════════════════════
 def build_report(sample_path, yara_findings, task_id, cuckoo_report, scan_dirs):
 
     """
@@ -332,6 +371,62 @@ def build_report(sample_path, yara_findings, task_id, cuckoo_report, scan_dirs):
     }
 
 
+def build_stdout_summary(report):
+
+    """
+        extracts a smaller summary from the full Cuckoo report
+        safe for printing to the terminal without the output becoming unreadble.
+        when the user has not provided an output file path, only this summary is printed to stdout.
+    """
+
+    scan = report.get("Scan summary", {})
+    dynamic = scan.get("Dynamic analysis", {})
+    static = scan.get("Static analysis", {})
+
+    # attempt to extract a trimmed behavioural summary from the cuckoo report
+    cuckoo_summary = None
+    full_cuckoo_report = dynamic.get("Report")
+    if full_cuckoo_report:
+        info = full_cuckoo_report.get("info", {})
+        signatures = full_cuckoo_report.get("signatures", [])
+        # extract only the signature names and severity rather than full detail
+        sigature_summary = [
+            {
+                "name": sig.get("name"),
+                "severity": sig.get("severity"),
+                "description": sig.get("description"),
+            }
+            for sig in signatures
+        ]
+        cuckoo_summary = {
+            "task_id": info.get("id"),
+            "duration_seconds": info.get("duration"),
+            "score": info.get("score"),
+            "category": info.get("category"),
+            "signatures_triggered": len(sigature_summary),
+            "signatures": sigature_summary,
+        }
+
+    return {
+        "Scan summary": {
+            "report_metadata": scan.get("report_metadata"),
+            "Static analysis": {
+                "Engine": static.get("Engine"),
+                "Total files scanned": static.get("Total files scanned"),
+                "Number of matched files": static.get("Number of matched files"),
+                "Number of unmatched files": static.get("Number of unmatched files"),
+                "findings": static.get("findings"),
+            },
+            "Dynamic analysis": {
+                "Engine": dynamic.get("Engine"),
+                "Task ID": dynamic.get("Task ID"),
+                "Status": dynamic.get("Status"),
+                "Summary": cuckoo_summary if cuckoo_summary else "not available",
+            }
+        }
+    }
+
+
 def save_report(report, output_path):
 
     """
@@ -343,17 +438,12 @@ def save_report(report, output_path):
     print(f"The report has been saved to: {output_path}")
 
 
-# ════════════════════════════════════════════════════════════════════════════
 #  cli entry point
-# ════════════════════════════════════════════════════════════════════════════
 def main():
 
     """
-        parses command line arguments, loads YARA rules, 
-        runs the scan, and then also runs a dynamic analysis 
-        of the matched files using the Cuckoo Sandbox API,
-        finally it builds a comprehensive report of the 
-        findings and saves it to a file or prints it to stdout.
+        parses command line arguments, validates inputs, and calls the 
+        appropriate functions in the correct order to execute the scan.
     """
 
     parser = argparse.ArgumentParser(
@@ -364,9 +454,7 @@ def main():
         )
     )
 
-    # add the arguments to the parser
-
-    # sample arguments
+    # directory to a specific file to be analysed.
     parser.add_argument(
         "--sample", 
         required=True, 
@@ -380,7 +468,7 @@ def main():
         help="path to the directory containing YARA rule files (.yar or .yara) to be used for scanning."
     )
 
-    # scan arguments
+    # directory that will be scanned for files to be analysed with the YARA rules.
     parser.add_argument(
         "--scan-directories", 
         nargs="+", 
@@ -388,51 +476,70 @@ def main():
         help="paths to the directories to be scanned."
     )
 
-    # exclude arguments
+    # directories to skip during a scan.
     parser.add_argument(
         "--exclude-directories", 
         nargs="*", default=[], 
         help="paths to the directories to be excluded from scanning."
     )
 
-    # file extension arguments
+    # file extensions to include in a scan.
     parser.add_argument(
         "--file-extensions", 
         nargs="*", 
         help="specifies the file extensions to include in the scan (e.g., .exe, .dll). If not specified, all files will be scanned."
     )
 
-    # size arguments
+    # maximum file size to include in a scan.
     parser.add_argument(
         "--max-size", 
         type=int, 
         help="specifies the maximum file size (in bytes) to be scanned. Files larger than this size will be skipped. If not specified, there is no size limit."
     )
 
-    # api arguments
+    # FIX 1: the default API port has been corrected and a note added to
+    # the help text clarifying that the Cuckoo REST API is a separate process
+    # from the main Cuckoo daemon. The cuckoo daemon (started with `cuckoo`)
+    # handles analysis scheduling and execution. The REST API (started with
+    # `cuckoo api --host 127.0.0.1 --port 8090`) is a separate Flask process
+    # that must also be running for this script to reach any API endpoint.
+    # The default port is 8090 because that is the port cuckoo api binds to.
+    # If your Cuckoo API was started on a different port, pass --cuckoo-api
+    # with the correct URL, e.g. --cuckoo-api http://localhost:8090
+    # ════════════════════════════════════════════════════════════════════════
     parser.add_argument(
         "--cuckoo-api", 
-        default="http://localhost:8090", 
-        help="the base URL of the Cuckoo Sandbox API (default: http://localhost:8090)"
+        default="http://localhost:8090",
+        help=(
+            "the base URL of the Cuckoo Sandbox REST API (default: http://localhost:8090). "
+            "Note: the Cuckoo REST API is started with: cuckoo api --host 127.0.0.1 --port 8090"
+        )
     )
 
-    # timeout arguments
+    # the Cuckoo REST Bearer token required for each scan request.
+    parser.add_argument(
+        "--token",
+        required=True,
+        help="the Cuckoo API Bearer token gotten from ~/.cuckoo/conf/cuckoo.conf"
+    )
+
+    # how long to wait for cuckoo to complete the analysis before timing out and exiting the script.
     parser.add_argument(
         "--timeout", 
         type=int, 
         default=300, 
-        help="the maximum time (in seconds) to wait for cuckoo to complete the scan before timing out (default: 300 seconds)"
+        help="the maximum time (in seconds) to wait for cuckoo to complete the scan before timing out is 300 seconds)"
     )
 
-    # output arguments
+    # if provided it save the full report to the specified file path in JSON format, otherwise it prints a condensed summary to stdout.
     parser.add_argument(
         "--output", 
-        help="the file path to save the JSON report. If not specified, the report will be printed to stdout."
+        help="the file path to save the full JSON report. If not specified, a condensed summary will be printed to stdout."
     )
 
     args = parser.parse_args()
 
-    #check if the necessary libraries are available before proceeding with the scan.
+    # if the necessary libraries are not available then exit the script with a helpful message.
     if not YARA_AVAILABLE:
         print("Error: the yara-python library is not installed. Please install it using 'pip install yara-python' and try again.")
         sys.exit(1)
@@ -442,27 +549,42 @@ def main():
         sys.exit(1)
 
     # this ensures that the file extensions are in the correct format,
-    # where each extension starts with a dot (e.g., .exe, .dll).
+    # where each extension starts with a dot (e.g., .exe, .dll) and is lowercase.
     extensions = None
     if args.file_extensions:
         extensions = [
-            e if e.startswith(".") else f".{e}" for e in args.file_extensions
+            (e if e.startswith(".") else f".{e}").lower()
+            for e in args.file_extensions
         ]
 
+    # checks if the sample file provided in the --sample arg 
+    # exists within any of the directories from the --scan-directories arg.
+    sample_path = Path(args.sample).resolve()
+    scan_paths_resolved = [Path(d).resolve() for d in args.scan_directories]
 
-    # start of the yara static analysis.
-    # this loads and compiles the YARA rules 
-    # from the specified directory,
-    # and if no rules are found, it exits the script.
+    sample_in_scan_dirs = any(
+        str(sample_path).startswith(str(scan_dir))
+        for scan_dir in scan_paths_resolved
+    )
+
+    if not sample_in_scan_dirs:
+        print(
+            f"\nWarning: the sample file '{sample_path}' is not located within any of the "
+            f"specified scan directories. YARA will not scan the submitted sample file itself. "
+            f"Only files found within the scan directories will be checked against the YARA rules. "
+            f"If you want YARA to scan the sample, add its parent directory to --scan-directories."
+        )
+
+    # starts the yara static analysis.
     print("\nYARA static analysis engine is starting...")
 
+    # loads and compiles the YARA rules from the specified directory.
     rules = load_yara_rules(args.yara_rules_dir)
     if rules is None:
-        print ("Error: no valid YARA rules were loaded. Please check the rules directory and try again.")
+        print("Error: no valid YARA rules were loaded. Please check the rules directory and try again.")
         sys.exit(1)
 
-    # performs a scan of the specified directories using 
-    # the loaded YARA rules and the provided filters.
+    # scans all files that pass the filter checks within the specified directories.
     yara_findings = run_scan(
         scan_dirs=args.scan_directories,
         exclude_dirs=args.exclude_directories,
@@ -471,24 +593,34 @@ def main():
         rules=rules,
     )
 
-
-    # start of the cuckoo sandbox dynamic analysis.
+    # starts the cuckoo sandbox dynamic analysis by submitting the sample file to the Cuckoo API for analysis.
     print("\nCuckoo Sandbox dynamic analysis is starting...")
 
-    task_id = submit_a_sample_to_cuckoo(args.sample, args.cuckoo_api)
+    task_id = submit_a_sample_to_cuckoo(args.sample, args.cuckoo_api, args.token)
+    cuckoo_report = None
+
+    # checks if a submission was successful by attempting to retrieve the tasd_id.
+    # if the submission failed, it prints an error message and skips the dynamic analysis.
+    # else the script queries the Cuckoo API for the status of the submitted task.
     if task_id is None:
         print("Error: failed to submit the sample to Cuckoo Sandbox. Dynamic analysis will be skipped.")
-        cuckoo_report = None
     else:
-        cuckoo_report = get_task_report(task_id, args.cuckoo_api)
-        if cuckoo_report is None:
+        is_analysis_completed = wait_for_task_completion(task_id, args.cuckoo_api, args.timeout, args.token)
+
+        if is_analysis_completed: # the task reached the "reported" state so the report is now available
+            cuckoo_report = get_task_report(task_id, args.cuckoo_api, args.token)
+            if cuckoo_report is None:
+                print(
+                    "Error: failed to retrieve the report from Cuckoo Sandbox. "
+                    "Dynamic analysis results will not be included in the final report."
+                )
+        else: # the task timed out or failed, so the report is not available
             print(
-                "Error: failed to retrieve the report from Cuckoo Sandbox. "
-                "Dynamic analysis results will not be included in the final report.")
+                "Dynamic analysis did not complete successfully. "
+                "The report will contain the static analysis results only."
+            )
 
-
-    # combine the findings from both the yara static
-    # analysis and the cuckoo sandbox dynamic analysis.
+    # combine the findings from both analysis results into a single report dictionary.
     print("\nBuilding the final report...")
 
     report = build_report(
@@ -503,15 +635,14 @@ def main():
         scan_dirs=args.scan_directories,
     )
 
-    
     # if an output path is provided, it saves the report to that path in JSON format.
-    # otherwise, it prints the report to stdout in JSON format.
     if args.output:
         save_report(report, args.output)
     else:
-        # prints a summary to stdout
-        print("\nJSON Report Summary")
-        print(json.dumps(report, indent=2))
+        # otherwise it prints a more readable summary to stdout.
+        print("\nJSON Report Summary (condensed — use --output to save the full report)")
+        summary = build_stdout_summary(report)
+        print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
