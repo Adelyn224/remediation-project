@@ -8,7 +8,7 @@ from pathlib import Path
 import argparse
 import json
 import sys
-import time                          # FIX 3: imported to support the polling loop timeout logic
+import time                          
 from datetime import datetime, timezone
 
 
@@ -497,16 +497,6 @@ def main():
         help="specifies the maximum file size (in bytes) to be scanned. Files larger than this size will be skipped. If not specified, there is no size limit."
     )
 
-    # FIX 1: the default API port has been corrected and a note added to
-    # the help text clarifying that the Cuckoo REST API is a separate process
-    # from the main Cuckoo daemon. The cuckoo daemon (started with `cuckoo`)
-    # handles analysis scheduling and execution. The REST API (started with
-    # `cuckoo api --host 127.0.0.1 --port 8090`) is a separate Flask process
-    # that must also be running for this script to reach any API endpoint.
-    # The default port is 8090 because that is the port cuckoo api binds to.
-    # If your Cuckoo API was started on a different port, pass --cuckoo-api
-    # with the correct URL, e.g. --cuckoo-api http://localhost:8090
-    # ════════════════════════════════════════════════════════════════════════
     parser.add_argument(
         "--cuckoo-api", 
         default="http://localhost:8090",
