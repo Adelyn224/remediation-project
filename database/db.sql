@@ -1,16 +1,17 @@
 -- create scan table --
 CREATE TABLE scan (
     scan_id     CHAR(4)    PRIMARY KEY,
+    target_path VARCHAR(255) NOT NULL,
     started_at  TIMESTAMP,
     ended_at    TIMESTAMP,
-    status      CHAR(10)   CHECK (status IN ('Scheduled', 'Running', 'Completed', 'Failed'))
+    status      TEXT   CHECK (status IN ('Scheduled', 'Running', 'Completed', 'Failed'))
 );
 
 
 -- create file table --
 CREATE TABLE file (
     file_id     CHAR(4)    PRIMARY KEY,
-    file_path   VARCHAR(255)
+    file_path   VARCHAR(255) NOT NULL
 );
 
 

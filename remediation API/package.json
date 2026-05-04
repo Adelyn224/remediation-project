@@ -1,7 +1,7 @@
 {
   "name": "malware-remediation-api-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
@@ -15,7 +15,6 @@
   "dependencies": {
     "express": "^5.2.1",
     "mysql2": "^3.16.2",
-    "pg": "^8.18.0",
     "sequelize": "^6.37.7"
   },
 

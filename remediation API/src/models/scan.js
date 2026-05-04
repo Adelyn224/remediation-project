@@ -5,9 +5,13 @@
 module.exports = (sequelize, DataTypes) => {
     const scan = sequelize.define('scan', {
         scan_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             primaryKey: true,
-            autoIncrement: true,
+        },
+
+        target_path: {
+            type: DataTypes.STRING,
+            allowNull: false,
         },
         
         started_at: {
@@ -23,11 +27,10 @@ module.exports = (sequelize, DataTypes) => {
         },
         
     }, {
-        // Defines the table name and disable timestamps if not needed
-        tableName: 'scans',
+        // defines the table name and disable timestamps if not needed
+        tableName: 'scan',
         timestamps: false,
     });
 
     return scan;
-}
-    
+}  

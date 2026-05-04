@@ -4,7 +4,8 @@
  */
 const database = require('../models');
 
-//grants access to the connected tables in the database
+
+//grants access to the tables in the database
 const detection = database.detection;
 const file = database.file;
 const malware = database.malware;
@@ -19,9 +20,21 @@ module.exports = {
         });
     },
 
+    
     // creates multiple detection entries in the database
     bulkCreate: async (detections) => {
         return detection.bulkCreate(detections);
-    }
+    },
 
+
+    // creates a single detection entry in the database
+    createDetection: async (detection_reports) => {
+        return detection.create(detection_reports);
+    },
+
+
+    // counts all detections in the database
+    countAll: async () => {
+        return detection.count();
+    }
 };

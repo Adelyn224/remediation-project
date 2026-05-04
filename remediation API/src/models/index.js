@@ -4,13 +4,18 @@
  * database named "malware_database" using the provided credentials.
  * sequelize transalate the JS code into SQL queries that mach the choosen database dialect (in this case, PostgreSQL).
  */
-
+require('dotenv').config();
 const {Sequelize} = require('sequelize');
 
-const sequelize = new Sequelize("malware_database", "database_user", "database_password", {
-    host: "localhost",
-    dialect: "postgres"
-});
+const sequelize = new Sequelize(
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASSWORD,
+    {
+        host: process.env.DB_HOST,
+        dialect: 'postgres'
+    }
+);
 
 
 //defines the database object and imports 
@@ -19,6 +24,7 @@ const sequelize = new Sequelize("malware_database", "database_user", "database_p
 const database = {};
 database.Sequelize = Sequelize;
 database.sequelize = sequelize;
+
 
 database.detection = require('./detection')(sequelize, Sequelize);
 database.file = require('./file')(sequelize, Sequelize);

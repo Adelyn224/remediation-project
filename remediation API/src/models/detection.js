@@ -5,28 +5,27 @@
 module.exports = (sequelize, DataTypes) => {
     const detection = sequelize.define('detection', {
         detection_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             primaryKey: true,
-            autoIncrement: true,
         },
 
         scan_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             allowNull: false,
         },
 
         file_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             allowNull: false,
         },
 
         malware_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             allowNull: false,
         },
 
         rule_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             allowNull: false,
         },
 

@@ -6,26 +6,25 @@ module.exports = (sequelize, DataTypes) => {
     const yara_rule = sequelize.define('yara_rule', {
         
         rule_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             primaryKey: true,
-            autoIncrement: true,
         }, 
 
         malware_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             allowNull: false,
         },
 
-        name: {
+        rule_name: {
             type: DataTypes.STRING,
         },
 
-        rule_text_for_pattern_matching: {
+        rule_strings: {
             type: DataTypes.TEXT,
         },
 
     }, {
-        // Defines the table name and disable timestamps if not needed
+        // defines the table name and disable timestamps if not needed
         tableName: 'yara_rule',
         timestamps: false,
     });

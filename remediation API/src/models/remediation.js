@@ -5,34 +5,33 @@
 module.exports = (sequelize, DataTypes) => {
     const remediation = sequelize.define('remediation', {
         remediation_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(6),
             primaryKey: true,
-            autoIncrement: true,
         },
         
         malware_id: {
-            type: DataTypes.INTEGER,
+            type: DataTypes.CHAR(4),
             allowNull: false,
         },
 
-        title: {
+        remediation_name: {
             type: DataTypes.STRING,
             allowNull: false,
         },
 
-        steps: {
+        remediation_steps: {
             type: DataTypes.TEXT,
             allowNull: false,
         },
 
-        source_URL: {
+        resource_link: {
             type: DataTypes.STRING,
             allowNull: true,
         },
 
     }, {
-        // Defines the table name and disable timestamps if not needed
-        tableName: 'remediations',
+        // defines the table name and disable timestamps if not needed
+        tableName: 'remediation',
         timestamps: false,
     });
 
